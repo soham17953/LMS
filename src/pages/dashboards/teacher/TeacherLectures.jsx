@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BookOpen, Edit, Trash2, Plus, Calendar } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { BookOpen, Edit, Trash2, Plus, Calendar, Loader2, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const MOCK_LECTURES = [
@@ -10,6 +10,30 @@ const TeacherLectures = () => {
   const [lectures, setLectures] = useState(MOCK_LECTURES);
   const [formData, setFormData] = useState({ id: null, title: '', description: '', subject: 'Maths', date: '', time: '', medium: 'English', class: '8' });
   const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const classOptions = useMemo(
+    () => (formData.medium === 'English' ? [8, 9, 10] : [3, 4, 5, 6, 7, 8, 9, 10]),
+    [formData.medium]
+  );
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!formData.title.trim()) nextErrors.title = 'Title is required.';
+    if (!formData.description.trim()) nextErrors.description = 'Description is required.';
+    if (!formData.date) nextErrors.date = 'Date is required.';
+    if (!formData.time) nextErrors.time = 'Time is required.';
+    if (!formData.class) nextErrors.class = 'Class is required.';
+    if (formData.medium === 'English' && ![8, 9, 10].includes(Number(formData.class))) {
+      nextErrors.class = 'English medium supports classes 8, 9, and 10 only.';
+    }
+    if (formData.medium === 'Marathi' && !(Number(formData.class) >= 3 && Number(formData.class) <= 10)) {
+      nextErrors.class = 'Marathi medium supports classes 3 to 10 only.';
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleDelete = (id) => {
     if(window.confirm('Are you sure you want to delete this lecture?')) {
@@ -26,23 +50,41 @@ const TeacherLectures = () => {
 
   const cancelEdit = () => {
     setIsEditing(false);
+    setErrors({});
     setFormData({ id: null, title: '', description: '', subject: 'Maths', date: '', time: '', medium: 'English', class: '8' });
-  }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if(!formData.title || !formData.date || !formData.time || !formData.class) {
-       return toast.error('Check required fields.');
+    if (!validate()) {
+      return toast.error('Please fix highlighted fields.');
     }
-    
-    if (isEditing) {
-      setLectures(lectures.map(l => l.id === formData.id ? formData : l));
-      toast.success('Lecture updated successfully.');
-    } else {
-      setLectures([{ ...formData, id: Date.now() }, ...lectures]);
-      toast.success('Lecture scheduled successfully.');
+
+    const isDuplicate = lectures.some(
+      (lecture) =>
+        lecture.id !== formData.id &&
+        lecture.title.trim().toLowerCase() === formData.title.trim().toLowerCase() &&
+        lecture.date === formData.date &&
+        lecture.time === formData.time &&
+        lecture.class === formData.class &&
+        lecture.medium === formData.medium
+    );
+    if (isDuplicate) {
+      return toast.error('Duplicate lecture schedule detected.');
     }
-    cancelEdit();
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      if (isEditing) {
+        setLectures(lectures.map((l) => (l.id === formData.id ? { ...formData, title: formData.title.trim(), description: formData.description.trim() } : l)));
+        toast.success('Lecture updated successfully.');
+      } else {
+        setLectures([{ ...formData, id: Date.now(), title: formData.title.trim(), description: formData.description.trim() }, ...lectures]);
+        toast.success('Lecture scheduled successfully.');
+      }
+      setIsSubmitting(false);
+      cancelEdit();
+    }, 500);
   };
 
   return (
@@ -62,11 +104,13 @@ const TeacherLectures = () => {
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Lecture Title</label>
-                <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" required/>
+                <input type="text" value={formData.title} onChange={e => { setFormData({...formData, title: e.target.value}); setErrors({ ...errors, title: '' }); }} className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none ${errors.title ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required/>
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
-                <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows="2" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none"></textarea>
+                <textarea value={formData.description} onChange={e => { setFormData({...formData, description: e.target.value}); setErrors({ ...errors, description: '' }); }} rows="2" className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none resize-none ${errors.description ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`}></textarea>
+                {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Subject</label>
@@ -79,24 +123,25 @@ const TeacherLectures = () => {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Date & Time</label>
                 <div className="flex gap-2">
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-1/2 px-2 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" required/>
-                  <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-1/2 px-2 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" required/>
+                  <input type="date" value={formData.date} onChange={e => { setFormData({...formData, date: e.target.value}); setErrors({ ...errors, date: '' }); }} className={`w-1/2 px-2 py-2 text-sm bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none ${errors.date ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required/>
+                  <input type="time" value={formData.time} onChange={e => { setFormData({...formData, time: e.target.value}); setErrors({ ...errors, time: '' }); }} className={`w-1/2 px-2 py-2 text-sm bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none ${errors.time ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required/>
                 </div>
+                {(errors.date || errors.time) && <p className="text-xs text-red-500 mt-1">{errors.date || errors.time}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Medium</label>
-                <select value={formData.medium} onChange={e => setFormData({...formData, medium: e.target.value, class: ''})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                <select value={formData.medium} onChange={e => { setFormData({...formData, medium: e.target.value, class: ''}); setErrors({ ...errors, class: '' }); }} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
                   <option value="English">English</option>
                   <option value="Marathi">Marathi</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Class</label>
-                <select value={formData.class} onChange={e => setFormData({...formData, class: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-100" required disabled={!formData.medium}>
+                <select value={formData.class} onChange={e => { setFormData({...formData, class: e.target.value}); setErrors({ ...errors, class: '' }); }} className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none disabled:bg-gray-100 ${errors.class ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required disabled={!formData.medium}>
                   <option value="" disabled>Select Class</option>
-                  {formData.medium === 'English' && [8,9,10].map(s => <option key={s} value={s}>Std {s}</option>)}
-                  {formData.medium === 'Marathi' && [3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Std {s}</option>)}
+                  {classOptions.map((s) => <option key={s} value={s}>Std {s}</option>)}
                 </select>
+                {errors.class && <p className="text-xs text-red-500 mt-1">{errors.class}</p>}
               </div>
            </div>
 
@@ -104,15 +149,15 @@ const TeacherLectures = () => {
              {isEditing && (
                <button type="button" onClick={cancelEdit} className="px-6 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
              )}
-             <button type="submit" disabled={!formData.class} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50">
-               {isEditing ? <Edit className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+             <button type="submit" disabled={!formData.class || isSubmitting} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? <Edit className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
                {isEditing ? 'Update Lecture' : 'Schedule Lecture'}
              </button>
            </div>
         </form>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="hidden md:block bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-max">
             <thead>
@@ -120,13 +165,14 @@ const TeacherLectures = () => {
                 <th className="p-4 pl-6">Title</th>
                 <th className="p-4">Subject</th>
                 <th className="p-4">Date & Time</th>
-                <th className="p-4">Medium/Class</th>
+                <th className="p-4">Medium</th>
+                <th className="p-4">Class</th>
                 <th className="p-4 pr-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {lectures.length === 0 ? (
-                <tr><td colSpan="5" className="p-8 text-center text-gray-500">No lectures scheduled.</td></tr>
+                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No data available</td></tr>
               ) : (
                 lectures.map(lecture => (
                   <tr key={lecture.id} className="hover:bg-gray-50/50 transition-colors">
@@ -137,9 +183,8 @@ const TeacherLectures = () => {
                     <td className="p-4 text-sm text-gray-600">
                       <div className="flex items-center gap-1"><Calendar className="w-4 h-4 text-gray-400"/> {lecture.date} at {lecture.time}</div>
                     </td>
-                    <td className="p-4 text-sm font-bold text-gray-800">
-                      {lecture.medium} - Std {lecture.class}
-                    </td>
+                    <td className="p-4 text-sm text-gray-600">{lecture.medium}</td>
+                    <td className="p-4 text-sm font-bold text-gray-800">Std {lecture.class}</td>
                     <td className="p-4 pr-6">
                        <div className="flex justify-end gap-2">
                           <button onClick={() => handleEdit(lecture)} className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200" title="Edit">
@@ -156,6 +201,32 @@ const TeacherLectures = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="md:hidden space-y-3">
+        {lectures.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-gray-500">No data available</div>
+        ) : (
+          lectures.map((lecture) => (
+            <div key={lecture.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-gray-900">{lecture.title}</p>
+                  <p className="text-xs text-gray-500 mt-1">{lecture.subject}</p>
+                </div>
+                <details className="relative">
+                  <summary className="list-none cursor-pointer p-2 rounded-lg hover:bg-gray-100"><MoreVertical className="w-4 h-4 text-gray-600" /></summary>
+                  <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button onClick={() => handleEdit(lecture)} className="w-full text-left px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50">Edit</button>
+                    <button onClick={() => handleDelete(lecture.id)} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                  </div>
+                </details>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">{lecture.date} at {lecture.time}</p>
+              <p className="text-sm text-gray-600 mt-1">{lecture.medium} • Std {lecture.class}</p>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

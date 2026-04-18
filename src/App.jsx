@@ -23,6 +23,16 @@ import AdminAnnouncements from './pages/dashboards/admin/AdminAnnouncements';
 import AdminNotices from './pages/dashboards/admin/AdminNotices';
 import AdminLectures from './pages/dashboards/admin/AdminLectures';
 import AdminAttendance from './pages/dashboards/admin/AdminAttendance';
+import TeacherLectures from './pages/dashboards/teacher/TeacherLectures';
+import TeacherHomework from './pages/dashboards/teacher/TeacherHomework';
+import TeacherNotices from './pages/dashboards/teacher/TeacherNotices';
+import TeacherAttendance from './pages/dashboards/teacher/TeacherAttendance';
+import TeacherMaterials from './pages/dashboards/teacher/TeacherMaterials';
+import StudentLectures from './pages/dashboards/student/StudentLectures';
+import StudentHomework from './pages/dashboards/student/StudentHomework';
+import StudentMaterials from './pages/dashboards/student/StudentMaterials';
+import StudentAttendance from './pages/dashboards/student/StudentAttendance';
+import StudentNotices from './pages/dashboards/student/StudentNotices';
 
 function App() {
   return (
@@ -53,11 +63,21 @@ function App() {
       {/* Teacher Dashboard */}
       <Route path="/teacher" element={<DashboardLayout role="teacher" />}>
         <Route index element={<TeacherHome />} />
+        <Route path="lectures" element={<TeacherLectures />} />
+        <Route path="homework" element={<TeacherHomework />} />
+        <Route path="notices" element={<TeacherNotices />} />
+        <Route path="attendance" element={<TeacherAttendance />} />
+        <Route path="materials" element={<TeacherMaterials />} />
       </Route>
 
       {/* Student Dashboard */}
       <Route path="/student" element={<DashboardLayout role="student" />}>
         <Route index element={<StudentHome />} />
+        <Route path="lectures" element={<StudentLectures />} />
+        <Route path="homework" element={<StudentHomework />} />
+        <Route path="materials" element={<StudentMaterials />} />
+        <Route path="attendance" element={<StudentAttendance />} />
+        <Route path="notices" element={<StudentNotices />} />
       </Route>
     </Routes>
     </>

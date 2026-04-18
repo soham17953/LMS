@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { FileText, Edit, Trash2, Plus, Upload, File } from 'lucide-react';
+import React, { useMemo, useState, useRef } from 'react';
+import { FileText, Edit, Trash2, Plus, Upload, File, Loader2, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const MOCK_HOMEWORK = [
@@ -10,7 +10,13 @@ const TeacherHomework = () => {
   const [homeworkList, setHomeworkList] = useState(MOCK_HOMEWORK);
   const [formData, setFormData] = useState({ id: null, title: '', description: '', file: null, medium: 'English', class: '8' });
   const [isEditing, setIsEditing] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const classOptions = useMemo(
+    () => (formData.medium === 'English' ? [8, 9, 10] : [3, 4, 5, 6, 7, 8, 9, 10]),
+    [formData.medium]
+  );
 
   const handleDelete = (id) => {
     if(window.confirm('Are you sure you want to delete this homework assignment?')) {
@@ -30,33 +36,68 @@ const TeacherHomework = () => {
     if (file) {
       if (file.type !== 'application/pdf') {
         toast.error('Only PDF files are allowed!');
+        setErrors({ ...errors, file: 'Only PDF files are allowed.' });
         e.target.value = null;
         return;
       }
+      setErrors({ ...errors, file: '' });
       setFormData({ ...formData, file: file.name });
     }
   };
 
   const cancelEdit = () => {
     setIsEditing(false);
+    setErrors({});
     setFormData({ id: null, title: '', description: '', file: null, medium: 'English', class: '8' });
     if(fileInputRef.current) fileInputRef.current.value = null;
-  }
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!formData.title.trim()) nextErrors.title = 'Title is required.';
+    if (!formData.description.trim()) nextErrors.description = 'Description is required.';
+    if (!formData.file) nextErrors.file = 'PDF file is required.';
+    if (!formData.class) nextErrors.class = 'Class is required.';
+    if (formData.medium === 'English' && ![8, 9, 10].includes(Number(formData.class))) {
+      nextErrors.class = 'English medium supports classes 8, 9, and 10 only.';
+    }
+    if (formData.medium === 'Marathi' && !(Number(formData.class) >= 3 && Number(formData.class) <= 10)) {
+      nextErrors.class = 'Marathi medium supports classes 3 to 10 only.';
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if(!formData.title || !formData.file || !formData.class) {
-       return toast.error('Title, Class, and PDF File are required.');
+    if (!validate()) {
+      return toast.error('Please fix highlighted fields.');
     }
-    
-    if (isEditing) {
-      setHomeworkList(homeworkList.map(h => h.id === formData.id ? { ...formData, date: h.date } : h));
-      toast.success('Homework updated successfully.');
-    } else {
-      setHomeworkList([{ ...formData, id: Date.now(), date: new Date().toISOString().split('T')[0] }, ...homeworkList]);
-      toast.success('Homework assigned successfully.');
+
+    const isDuplicate = homeworkList.some(
+      (hw) =>
+        hw.id !== formData.id &&
+        hw.title.trim().toLowerCase() === formData.title.trim().toLowerCase() &&
+        hw.class === formData.class &&
+        hw.medium === formData.medium &&
+        hw.file === formData.file
+    );
+    if (isDuplicate) {
+      return toast.error('Duplicate homework record detected.');
     }
-    cancelEdit();
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      if (isEditing) {
+        setHomeworkList(homeworkList.map(h => h.id === formData.id ? { ...formData, title: formData.title.trim(), description: formData.description.trim(), date: h.date } : h));
+        toast.success('Homework updated successfully.');
+      } else {
+        setHomeworkList([{ ...formData, id: Date.now(), title: formData.title.trim(), description: formData.description.trim(), date: new Date().toISOString().split('T')[0] }, ...homeworkList]);
+        toast.success('Homework assigned successfully.');
+      }
+      setIsSubmitting(false);
+      cancelEdit();
+    }, 500);
   };
 
   return (
@@ -76,11 +117,13 @@ const TeacherHomework = () => {
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Homework Title</label>
-                <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" required/>
+                <input type="text" value={formData.title} onChange={e => { setFormData({...formData, title: e.target.value}); setErrors({ ...errors, title: '' }); }} className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none ${errors.title ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required/>
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Description (Optional)</label>
-                <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows="2" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none"></textarea>
+                <textarea value={formData.description} onChange={e => { setFormData({...formData, description: e.target.value}); setErrors({ ...errors, description: '' }); }} rows="2" className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none resize-none ${errors.description ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`}></textarea>
+                {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
               </div>
               
               <div className="sm:col-span-2">
@@ -88,25 +131,26 @@ const TeacherHomework = () => {
                 <div className="relative flex items-center h-12 w-full bg-gray-50 border border-gray-200 border-dashed rounded-xl overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer">
                   <input type="file" ref={fileInputRef} accept=".pdf" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
                   <div className="flex items-center justify-center w-full gap-2 text-sm font-bold text-gray-600 pointer-events-none">
-                     {formData.file ? <span className="text-indigo-600 flex items-center gap-1"><File className="w-4 h-4"/> {formData.file}</span> : <span className="flex items-center gap-1"><Upload className="w-4 h-4"/> Click to browse PDF</span>}
+                  {formData.file ? <span className="text-indigo-600 flex items-center gap-1"><File className="w-4 h-4"/> {formData.file}</span> : <span className="flex items-center gap-1"><Upload className="w-4 h-4"/> Click to browse PDF</span>}
                   </div>
                 </div>
+                {errors.file && <p className="text-xs text-red-500 mt-1">{errors.file}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Medium</label>
-                <select value={formData.medium} onChange={e => setFormData({...formData, medium: e.target.value, class: ''})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                <select value={formData.medium} onChange={e => { setFormData({...formData, medium: e.target.value, class: ''}); setErrors({ ...errors, class: '' }); }} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
                   <option value="English">English</option>
                   <option value="Marathi">Marathi</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Class</label>
-                <select value={formData.class} onChange={e => setFormData({...formData, class: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-100" required disabled={!formData.medium}>
+                <select value={formData.class} onChange={e => { setFormData({...formData, class: e.target.value}); setErrors({ ...errors, class: '' }); }} className={`w-full px-4 py-2 bg-gray-50 border rounded-xl focus:bg-white focus:ring-2 outline-none disabled:bg-gray-100 ${errors.class ? 'border-red-400 focus:ring-red-500' : 'border-gray-200 focus:ring-indigo-500'}`} required disabled={!formData.medium}>
                   <option value="" disabled>Select Class</option>
-                  {formData.medium === 'English' && [8,9,10].map(s => <option key={s} value={s}>Std {s}</option>)}
-                  {formData.medium === 'Marathi' && [3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Std {s}</option>)}
+                  {classOptions.map(s => <option key={s} value={s}>Std {s}</option>)}
                 </select>
+                {errors.class && <p className="text-xs text-red-500 mt-1">{errors.class}</p>}
               </div>
            </div>
 
@@ -114,15 +158,15 @@ const TeacherHomework = () => {
              {isEditing && (
                <button type="button" onClick={cancelEdit} className="px-6 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
              )}
-             <button type="submit" disabled={!formData.class || !formData.file} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50">
-               {isEditing ? <Edit className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+             <button type="submit" disabled={!formData.class || !formData.file || isSubmitting} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? <Edit className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
                {isEditing ? 'Update Homework' : 'Assign Homework'}
              </button>
            </div>
         </form>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="hidden md:block bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-max">
             <thead>
@@ -137,7 +181,7 @@ const TeacherHomework = () => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {homeworkList.length === 0 ? (
-                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No homework assigned yet.</td></tr>
+                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No data available</td></tr>
               ) : (
                 homeworkList.map(hw => (
                   <tr key={hw.id} className="hover:bg-gray-50/50 transition-colors">
@@ -164,6 +208,32 @@ const TeacherHomework = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="md:hidden space-y-3">
+        {homeworkList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-gray-500">No data available</div>
+        ) : (
+          homeworkList.map((hw) => (
+            <div key={hw.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-gray-900">{hw.title}</p>
+                  <p className="text-xs text-gray-500 mt-1">{hw.medium} • Std {hw.class}</p>
+                </div>
+                <details className="relative">
+                  <summary className="list-none cursor-pointer p-2 rounded-lg hover:bg-gray-100"><MoreVertical className="w-4 h-4 text-gray-600" /></summary>
+                  <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button onClick={() => handleEdit(hw)} className="w-full text-left px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50">Edit</button>
+                    <button onClick={() => handleDelete(hw.id)} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                  </div>
+                </details>
+              </div>
+              <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><File className="w-4 h-4" /> {hw.file}</p>
+              <p className="text-xs text-gray-500 mt-1">{hw.date}</p>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
