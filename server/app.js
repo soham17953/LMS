@@ -9,9 +9,21 @@ const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
-app.use(cors());
+// Configure CORS to allow your Vercel frontend
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(clerkMiddleware());
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
 
 // Mount routes
 app.use('/api', userRoutes);
