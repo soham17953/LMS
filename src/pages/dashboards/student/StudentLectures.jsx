@@ -19,9 +19,11 @@ const StudentLectures = () => {
       setIsLoading(true);
       const token = await getToken();
       const data = await AuthService.getStudentLectures(token);
+      console.log('[StudentLectures] Fetched lectures:', data);
       setLectures(data);
-    } catch {
-      toast.error('Failed to load lectures.');
+    } catch (error) {
+      console.error('[StudentLectures] Error:', error);
+      toast.error(error.message || 'Failed to load lectures.');
     } finally {
       setIsLoading(false);
     }

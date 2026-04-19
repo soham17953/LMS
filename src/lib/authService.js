@@ -57,19 +57,28 @@ export const AuthService = {
 
   getStudentLectures: async (clerkToken) => {
     const res = await fetch('/api/student/lectures', { headers: { Authorization: `Bearer ${clerkToken}` } });
-    if (!res.ok) throw new Error('Failed to fetch lectures');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to fetch lectures' }));
+      throw new Error(error.error || 'Failed to fetch lectures');
+    }
     return await res.json();
   },
 
   getStudentAttendance: async (clerkToken) => {
     const res = await fetch('/api/student/attendance', { headers: { Authorization: `Bearer ${clerkToken}` } });
-    if (!res.ok) throw new Error('Failed to fetch attendance');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to fetch attendance' }));
+      throw new Error(error.error || 'Failed to fetch attendance');
+    }
     return await res.json();
   },
 
   getStudentHomework: async (clerkToken) => {
     const res = await fetch('/api/student/homework', { headers: { Authorization: `Bearer ${clerkToken}` } });
-    if (!res.ok) throw new Error('Failed to fetch homework');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to fetch homework' }));
+      throw new Error(error.error || 'Failed to fetch homework');
+    }
     return await res.json();
   },
 
@@ -90,13 +99,19 @@ export const AuthService = {
 
   getStudentMaterials: async (clerkToken) => {
     const res = await fetch('/api/student/materials', { headers: { Authorization: `Bearer ${clerkToken}` } });
-    if (!res.ok) throw new Error('Failed to fetch materials');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to fetch materials' }));
+      throw new Error(error.error || 'Failed to fetch materials');
+    }
     return await res.json();
   },
 
   getStudentNotices: async (clerkToken) => {
     const res = await fetch('/api/student/notices', { headers: { Authorization: `Bearer ${clerkToken}` } });
-    if (!res.ok) throw new Error('Failed to fetch notices');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to fetch notices' }));
+      throw new Error(error.error || 'Failed to fetch notices');
+    }
     return await res.json();
   },
 

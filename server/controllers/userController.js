@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeClassArray } = require('../utils/classUtils');
 
 exports.getMe = async (req, res) => {
   try {
@@ -28,13 +29,17 @@ exports.createProfile = async (req, res) => {
     const status = isSuperAdmin ? 'APPROVED' : 'PENDING';
     const role = isSuperAdmin ? 'ADMIN' : (userData.role || '').toUpperCase();
 
+    // Normalize standards to remove "th", "st", "nd", "rd" suffixes
+    // This ensures consistency with database content format
+    const normalizedStandards = normalizeClassArray(userData.standards || []);
+
     const newProfile = {
       id: clerkUserId, 
       name: userData.name,
       email: userData.email,
       role: role,
       medium: userData.medium || null,
-      standards: userData.standards || [],
+      standards: normalizedStandards,
       subjects: userData.subjects || [],
       status: status
     };

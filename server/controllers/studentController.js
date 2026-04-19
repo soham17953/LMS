@@ -4,30 +4,81 @@ const { v4: uuidv4 } = require('uuid');
 // Helper: ensure standards is a plain array of strings
 const getStandardsArray = (standards) => {
   if (!standards) return [];
-  if (Array.isArray(standards)) return standards.map(String);
+  if (Array.isArray(standards)) {
+    return standards.map(s => {
+      if (typeof s === 'object' && s !== null) {
+        // Handle case where standards might be objects with a value property
+        return String(s.value || s.standard || s);
+      }
+      return String(s);
+    }).filter(Boolean);
+  }
   if (typeof standards === 'string') {
-    try { return JSON.parse(standards).map(String); } catch { return [standards]; }
+    try { 
+      const parsed = JSON.parse(standards);
+      return Array.isArray(parsed) ? parsed.map(String) : [standards]; 
+    } catch { 
+      return [standards]; 
+    }
   }
   return [];
+};
+
+// Helper: get subject IDs from a list of subject names
+const getSubjectIds = async (subjectNames) => {
+  if (!subjectNames || !subjectNames.length) return null;
+  const { data } = await supabase
+    .from('subjects')
+    .select('id')
+    .in('name', subjectNames);
+  return data ? data.map((s) => s.id) : null;
 };
 
 exports.getLectures = async (req, res) => {
   try {
     const profile = req.userProfile;
     const standards = getStandardsArray(profile.standards);
+    const studentSubjects = Array.isArray(profile.subjects) ? profile.subjects : [];
+
+    console.log('[getLectures] Profile:', { 
+      id: profile.id, 
+      standards, 
+      medium: profile.medium, 
+      subjects: studentSubjects 
+    });
 
     if (!standards.length || !profile.medium) {
+      console.log('[getLectures] Missing standards or medium, returning empty array');
       return res.json([]);
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('lectures')
       .select('*, subject:subjects(name)')
       .in('class', standards)
       .eq('medium', profile.medium)
       .order('scheduled_at', { ascending: true, nullsFirst: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    // If student has specific subjects enrolled, filter by those subject IDs
+    // Otherwise show all lectures for their class/medium
+    if (studentSubjects.length > 0) {
+      const subjectIds = await getSubjectIds(studentSubjects);
+      console.log('[getLectures] Student subjects:', studentSubjects, 'IDs:', subjectIds);
+      if (subjectIds && subjectIds.length > 0) {
+        // Show lectures for enrolled subjects OR lectures with no subject (general)
+        query = query.or(`subject_id.in.(${subjectIds.join(',')}),subject_id.is.null`);
+      }
+    } else {
+      console.log('[getLectures] No subject filter - showing all lectures for class/medium');
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[getLectures] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('[getLectures] Found', data?.length || 0, 'lectures');
 
     res.json(
       (data || []).map((lecture) => ({
@@ -36,6 +87,7 @@ exports.getLectures = async (req, res) => {
       }))
     );
   } catch (error) {
+    console.error('[getLectures] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -69,19 +121,62 @@ exports.getHomework = async (req, res) => {
   try {
     const profile = req.userProfile;
     const standards = getStandardsArray(profile.standards);
+    const studentSubjects = Array.isArray(profile.subjects) ? profile.subjects : [];
+
+    console.log('[getHomework] Profile:', { 
+      id: profile.id, 
+      standards, 
+      medium: profile.medium, 
+      subjects: studentSubjects 
+    });
 
     if (!standards.length || !profile.medium) {
+      console.log('[getHomework] Missing standards or medium, returning empty array');
       return res.json([]);
     }
 
-    const { data, error } = await supabase
+    // Select explicit columns — avoids schema cache errors for columns that may not exist
+    let query = supabase
       .from('homework')
-      .select('*, subject:subjects(name)')
+      .select('id, title, description, due_date, class, medium, subject_id, created_at, teacher_id, subject:subjects(name)')
       .in('class', standards)
       .eq('medium', profile.medium)
       .order('due_date', { ascending: true });
 
-    if (error) return res.status(500).json({ error: error.message });
+    // Filter by student's enrolled subjects if set
+    if (studentSubjects.length > 0) {
+      const subjectIds = await getSubjectIds(studentSubjects);
+      console.log('[getHomework] Student subjects:', studentSubjects, 'IDs:', subjectIds);
+      if (subjectIds && subjectIds.length > 0) {
+        query = query.or(`subject_id.in.(${subjectIds.join(',')}),subject_id.is.null`);
+      }
+    } else {
+      console.log('[getHomework] No subject filter - showing all homework for class/medium');
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[getHomework] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('[getHomework] Found', data?.length || 0, 'homework items');
+
+    // Try to also fetch file_url — gracefully handle if column doesn't exist
+    let fileUrlMap = {};
+    try {
+      const { data: fileData } = await supabase
+        .from('homework')
+        .select('id, file_url')
+        .in('class', standards)
+        .eq('medium', profile.medium);
+      if (fileData) {
+        fileData.forEach((row) => { fileUrlMap[row.id] = row.file_url || null; });
+      }
+    } catch (err) { 
+      console.log('[getHomework] file_url column may not exist:', err.message);
+    }
 
     // Fetch this student's submissions
     const { data: subsData, error: subsError } = await supabase
@@ -89,7 +184,10 @@ exports.getHomework = async (req, res) => {
       .select('homework_id, file_url, submitted_at')
       .eq('student_id', profile.id);
 
-    if (subsError) return res.status(500).json({ error: subsError.message });
+    if (subsError) {
+      console.error('[getHomework] Submissions query error:', subsError);
+      return res.status(500).json({ error: subsError.message });
+    }
 
     const subsMap = {};
     (subsData || []).forEach((sub) => {
@@ -100,12 +198,14 @@ exports.getHomework = async (req, res) => {
       (data || []).map((hw) => ({
         ...hw,
         subjectName: hw.subject?.name || 'General',
+        file_url: fileUrlMap[hw.id] ?? null,
         submission_url: subsMap[hw.id]?.file_url || null,
         submission_date: subsMap[hw.id]?.submitted_at || null,
         isSubmitted: !!subsMap[hw.id],
       }))
     );
   } catch (error) {
+    console.error('[getHomework] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -182,19 +282,44 @@ exports.getMaterials = async (req, res) => {
   try {
     const profile = req.userProfile;
     const standards = getStandardsArray(profile.standards);
+    const studentSubjects = Array.isArray(profile.subjects) ? profile.subjects : [];
+
+    console.log('[getMaterials] Profile:', { 
+      id: profile.id, 
+      standards, 
+      medium: profile.medium, 
+      subjects: studentSubjects 
+    });
 
     if (!standards.length || !profile.medium) {
+      console.log('[getMaterials] Missing standards or medium, returning empty array');
       return res.json([]);
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('study_materials')
       .select('*, subject:subjects(name)')
       .in('class', standards)
       .eq('medium', profile.medium)
       .order('created_at', { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (studentSubjects.length > 0) {
+      const subjectIds = await getSubjectIds(studentSubjects);
+      console.log('[getMaterials] Student subjects:', studentSubjects, 'IDs:', subjectIds);
+      if (subjectIds && subjectIds.length > 0) {
+        query = query.or(`subject_id.in.(${subjectIds.join(',')}),subject_id.is.null`);
+      }
+    } else {
+      console.log('[getMaterials] No subject filter - showing all materials for class/medium');
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[getMaterials] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('[getMaterials] Found', data?.length || 0, 'materials');
 
     res.json(
       (data || []).map((m) => ({
@@ -203,6 +328,7 @@ exports.getMaterials = async (req, res) => {
       }))
     );
   } catch (error) {
+    console.error('[getMaterials] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -70,11 +70,15 @@ const TeacherAttendance = () => {
     e.preventDefault();
     if (!validateSession()) return toast.error('Please fix highlighted fields.');
 
-    // Check if session already exists for this date/class/medium
+    // Check if session already exists for this date/class/medium/subject
     const exists = records.find(
-      (r) => r.date === sessionData.date && r.class === String(sessionData.class) && r.medium === sessionData.medium
+      (r) =>
+        r.date === sessionData.date &&
+        r.class === String(sessionData.class) &&
+        r.medium === sessionData.medium &&
+        (r.subjectName || '') === sessionData.subject
     );
-    if (exists) return toast.error('Attendance for this class on this date has already been recorded.');
+    if (exists) return toast.error('Attendance for this class and subject on this date has already been recorded.');
 
     try {
       setIsFetchingStudents(true);

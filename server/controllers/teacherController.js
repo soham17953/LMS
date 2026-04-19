@@ -40,8 +40,10 @@ const resolveSubjectId = async (subjectName) => {
 exports.getDashboardStats = async (req, res) => {
   try {
     const profile = req.userProfile;
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
     const [{ count: lecturesCount }, { count: homeworkCount }, { count: noticesCount }] =
       await Promise.all([
@@ -49,7 +51,8 @@ exports.getDashboardStats = async (req, res) => {
           .from('lectures')
           .select('*', { count: 'exact', head: true })
           .eq('teacher_id', profile.id)
-          .gte('created_at', startOfDay.toISOString()),
+          .gte('scheduled_at', todayStart.toISOString())
+          .lte('scheduled_at', todayEnd.toISOString()),
         supabase
           .from('homework')
           .select('*', { count: 'exact', head: true })
@@ -101,8 +104,9 @@ exports.createLecture = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: title, medium, class, date' });
     }
 
-    // Combine date + time into a single ISO timestamp
-    const dateTimeStr = time ? `${date}T${time}:00` : `${date}T00:00:00`;
+    // Combine date + time into a proper ISO 8601 timestamp
+    // Append :00 seconds if time provided, otherwise default to midnight
+    const dateTimeStr = time ? `${date}T${time}:00.000Z` : `${date}T00:00:00.000Z`;
     if (!isValidDate(dateTimeStr)) {
       return res.status(400).json({ error: 'Invalid date/time format' });
     }
@@ -141,7 +145,7 @@ exports.updateLecture = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const dateTimeStr = time ? `${date}T${time}:00` : `${date}T00:00:00`;
+    const dateTimeStr = time ? `${date}T${time}:00.000Z` : `${date}T00:00:00.000Z`;
     if (!isValidDate(dateTimeStr)) {
       return res.status(400).json({ error: 'Invalid date/time format' });
     }
@@ -241,18 +245,21 @@ exports.createHomework = async (req, res) => {
 
     const subject_id = await resolveSubjectId(subjectName);
 
+    // Build insert payload — only include file_url if the column exists
+    const insertPayload = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      medium,
+      class: std,
+      due_date,
+      subject_id: subject_id || null,
+      teacher_id: profile.id,
+    };
+    if (publicUrl !== null) insertPayload.file_url = publicUrl;
+
     const { data, error } = await supabase
       .from('homework')
-      .insert([{
-        title: title.trim(),
-        description: description?.trim() || null,
-        medium,
-        class: std,
-        due_date,
-        subject_id: subject_id || null,
-        file_url: publicUrl,
-        teacher_id: profile.id,
-      }])
+      .insert([insertPayload])
       .select('*, subject:subjects(name)')
       .single();
 
@@ -278,7 +285,7 @@ exports.updateHomework = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Fetch existing to get old file_url
+    // Fetch existing to get old file_url (column may not exist yet)
     const { data: existing, error: fetchErr } = await supabase
       .from('homework')
       .select('id, file_url')
@@ -288,7 +295,7 @@ exports.updateHomework = async (req, res) => {
 
     if (fetchErr || !existing) return res.status(404).json({ error: 'Homework not found' });
 
-    let publicUrl = existing.file_url;
+    let publicUrl = existing.file_url ?? null;
     if (req.file) {
       if (req.file.mimetype !== 'application/pdf') {
         return res.status(400).json({ error: 'Only PDFs are allowed' });
@@ -301,23 +308,25 @@ exports.updateHomework = async (req, res) => {
       if (uploadError) return res.status(500).json({ error: uploadError.message });
       const { data: urlData } = supabase.storage.from('lms-files').getPublicUrl(filePathKey);
       publicUrl = urlData.publicUrl;
-      // Delete old file
       if (existing.file_url) await deleteSupabaseFile(existing.file_url);
     }
 
     const subject_id = await resolveSubjectId(subjectName);
 
+    const updatePayload = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      medium,
+      class: std,
+      due_date,
+      subject_id: subject_id || null,
+    };
+    // Only set file_url if we have a value (avoids schema cache error if column missing)
+    if (publicUrl !== null) updatePayload.file_url = publicUrl;
+
     const { data, error } = await supabase
       .from('homework')
-      .update({
-        title: title.trim(),
-        description: description?.trim() || null,
-        medium,
-        class: std,
-        due_date,
-        subject_id: subject_id || null,
-        file_url: publicUrl,
-      })
+      .update(updatePayload)
       .eq('id', req.params.id)
       .eq('teacher_id', profile.id)
       .select('*, subject:subjects(name)')
@@ -338,14 +347,26 @@ exports.updateHomework = async (req, res) => {
 exports.deleteHomework = async (req, res) => {
   try {
     const profile = req.userProfile;
+    // Select only id first; file_url may not exist if column hasn't been added yet
     const { data: hwData, error: fetchErr } = await supabase
       .from('homework')
-      .select('id, file_url')
+      .select('id')
       .eq('id', req.params.id)
       .eq('teacher_id', profile.id)
       .single();
 
     if (fetchErr || !hwData) return res.status(404).json({ error: 'Homework not found' });
+
+    // Try to get file_url separately — ignore error if column doesn't exist
+    let fileUrl = null;
+    try {
+      const { data: fileData } = await supabase
+        .from('homework')
+        .select('file_url')
+        .eq('id', req.params.id)
+        .single();
+      fileUrl = fileData?.file_url || null;
+    } catch (_) { /* column may not exist */ }
 
     const { error } = await supabase
       .from('homework')
@@ -355,7 +376,7 @@ exports.deleteHomework = async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    if (hwData.file_url) await deleteSupabaseFile(hwData.file_url);
+    if (fileUrl) await deleteSupabaseFile(fileUrl);
 
     res.json({ success: true });
   } catch (error) {
@@ -657,7 +678,7 @@ exports.getAttendanceHistory = async (req, res) => {
     const profile = req.userProfile;
     const { data, error } = await supabase
       .from('attendance')
-      .select('*, student:profiles(name), subject:subjects(name)')
+      .select('*, student:profiles!attendance_student_id_fkey(name), subject:subjects(name)')
       .eq('teacher_id', profile.id)
       .order('date', { ascending: false });
 

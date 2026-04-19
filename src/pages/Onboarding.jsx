@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AuthService } from '../lib/authService';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
+import { normalizeClass, normalizeClassArray } from '../lib/classUtils';
 
 const Onboarding = () => {
   const navigate = useNavigate();
@@ -63,6 +64,12 @@ const Onboarding = () => {
     setIsSubmitting(true);
     const loadingToast = toast.loading('Preparing your profile...');
 
+    // Normalize class values to remove "th", "st", "nd", "rd" suffixes
+    // This ensures consistency with database content format
+    const normalizedStandards = formData.role === 'Student' 
+      ? [normalizeClass(formData.studentStd)]
+      : normalizeClassArray(formData.teacherStandards);
+
     const finalPayload = {
        id: userId,
        name: user.fullName || user.firstName || 'User',
@@ -70,7 +77,7 @@ const Onboarding = () => {
        role: formData.role,
        authType: user.externalAccounts?.length > 0 ? 'oauth' : 'email',
        medium: formData.role === 'Student' ? formData.studentMedium : formData.teacherMedium,
-       standards: formData.role === 'Student' ? [formData.studentStd] : formData.teacherStandards,
+       standards: normalizedStandards,
        subjects: formData.role === 'Teacher' ? formData.teacherSubjects : []
     };
 
@@ -139,8 +146,8 @@ const Onboarding = () => {
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Standard (Class)</label>
                         <select name="studentStd" value={formData.studentStd} onChange={handleChange} required disabled={!formData.studentMedium} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50">
                           <option value="" disabled>Select Standard</option>
-                          {formData.studentMedium === 'English' && ['8th','9th','10th'].map(s => <option key={s} value={s}>Std {s}</option>)}
-                          {formData.studentMedium === 'Marathi' && ['5th','6th','7th','8th','9th','10th'].map(s => <option key={s} value={s}>Std {s}</option>)}
+                          {formData.studentMedium === 'English' && ['8','9','10'].map(s => <option key={s} value={s}>Std {s}th</option>)}
+                          {formData.studentMedium === 'Marathi' && ['5','6','7','8','9','10'].map(s => <option key={s} value={s}>Std {s}th</option>)}
                         </select>
                       </div>
                     </>
@@ -166,8 +173,8 @@ const Onboarding = () => {
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Standards Handled (Multi-Select)</label>
                         <div className="flex flex-wrap gap-2">
-                          {['5th','6th','7th','8th','9th','10th'].map(std => (
-                             <button key={std} type="button" onClick={() => handleMultiSelect('teacherStandards', std)} className={`px-3 py-1.5 text-sm rounded-lg border ${formData.teacherStandards.includes(std) ? 'bg-primary-100 border-primary-500 text-primary-700 font-bold' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>{std}</button>
+                          {['5','6','7','8','9','10'].map(std => (
+                             <button key={std} type="button" onClick={() => handleMultiSelect('teacherStandards', std)} className={`px-3 py-1.5 text-sm rounded-lg border ${formData.teacherStandards.includes(std) ? 'bg-primary-100 border-primary-500 text-primary-700 font-bold' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>{std}th</button>
                           ))}
                         </div>
                       </div>

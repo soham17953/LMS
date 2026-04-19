@@ -19,9 +19,11 @@ const StudentMaterials = () => {
       setIsLoading(true);
       const token = await getToken();
       const data = await AuthService.getStudentMaterials(token);
+      console.log('[StudentMaterials] Fetched materials:', data);
       setMaterials(data);
-    } catch {
-      toast.error('Failed to load study materials.');
+    } catch (error) {
+      console.error('[StudentMaterials] Error:', error);
+      toast.error(error.message || 'Failed to load study materials.');
     } finally {
       setIsLoading(false);
     }
