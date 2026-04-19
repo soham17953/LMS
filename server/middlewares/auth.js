@@ -12,10 +12,12 @@ const requireAuth = (req, res, next) => {
 const getStudentProfile = async (clerkUserId) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('standards, medium, id')
+    .select('standards, medium, id, role, status')
     .eq('id', clerkUserId)
     .single();
   if (error || !data) throw new Error("Student profile not found");
+  if (data.role !== 'STUDENT') throw new Error("Unauthorized role");
+  if (data.status !== 'APPROVED') throw new Error("Account not approved yet");
   return data;
 };
 

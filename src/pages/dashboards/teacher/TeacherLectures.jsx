@@ -58,8 +58,8 @@ const TeacherLectures = () => {
   };
 
   const handleEdit = (lecture) => {
-    // Parse date_time back into date + time fields
-    const dt = lecture.created_at ? new Date(lecture.created_at) : new Date();
+    // Parse scheduled_at back into date + time fields
+    const dt = lecture.scheduled_at ? new Date(lecture.scheduled_at) : new Date();
     const date = dt.toISOString().split('T')[0];
     const time = dt.toTimeString().slice(0, 5);
     setFormData({
@@ -264,7 +264,7 @@ const TeacherLectures = () => {
                     <td className="p-4 pl-6 font-bold text-gray-900 max-w-[200px] truncate">{lecture.title}</td>
                     <td className="p-4"><span className="px-2.5 py-1 bg-gray-100 rounded-md text-gray-700 text-sm font-medium">{lecture.subjectName}</span></td>
                     <td className="p-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-1"><Calendar className="w-4 h-4 text-gray-400" /> {formatDateTime(lecture.created_at)}</div>
+                      <div className="flex items-center gap-1"><Calendar className="w-4 h-4 text-gray-400" /> {formatDateTime(lecture.scheduled_at || lecture.created_at)}</div>
                     </td>
                     <td className="p-4 text-sm text-gray-600">{lecture.medium}</td>
                     <td className="p-4 text-sm font-bold text-gray-800">Std {lecture.class}</td>
@@ -308,7 +308,7 @@ const TeacherLectures = () => {
                   </div>
                 </details>
               </div>
-              <p className="text-sm text-gray-600 mt-2">{formatDateTime(lecture.created_at)}</p>
+              <p className="text-sm text-gray-600 mt-2">{formatDateTime(lecture.scheduled_at || lecture.created_at)}</p>
               <p className="text-sm text-gray-600 mt-1">{lecture.medium} • Std {lecture.class}</p>
             </div>
           ))

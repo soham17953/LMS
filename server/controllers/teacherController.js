@@ -119,6 +119,7 @@ exports.createLecture = async (req, res) => {
         medium,
         class: std,
         teacher_id: profile.id,
+        scheduled_at: dateTimeStr,
       }])
       .select('*, subject:subjects(name)')
       .single();
@@ -156,6 +157,7 @@ exports.updateLecture = async (req, res) => {
         video_url: video_url || null,
         medium,
         class: std,
+        scheduled_at: dateTimeStr,
       })
       .eq('id', req.params.id)
       .eq('teacher_id', profile.id)

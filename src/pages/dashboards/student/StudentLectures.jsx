@@ -77,7 +77,7 @@ const StudentLectures = () => {
                 <th className="p-4 pl-6">Title</th>
                 <th className="p-4">Subject</th>
                 <th className="p-4">Description</th>
-                <th className="p-4">Date Added</th>
+                <th className="p-4">Scheduled</th>
                 <th className="p-4">Medium</th>
                 <th className="p-4">Class</th>
                 <th className="p-4 pr-6">Video</th>
@@ -95,7 +95,9 @@ const StudentLectures = () => {
                     <td className="p-4 text-gray-600 text-sm">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        {new Date(lecture.created_at).toLocaleDateString()}
+                        {lecture.scheduled_at
+                          ? new Date(lecture.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          : new Date(lecture.created_at).toLocaleDateString()}
                       </div>
                     </td>
                     <td className="p-4 text-gray-600">{lecture.medium}</td>
@@ -133,7 +135,10 @@ const StudentLectures = () => {
               <p className="text-sm text-gray-600 mt-1">{lecture.subjectName || 'General'}</p>
               {lecture.description && <p className="text-sm text-gray-500 mt-1">{lecture.description}</p>}
               <p className="text-sm text-gray-600 mt-1 flex items-center gap-1">
-                <Calendar className="w-4 h-4" />{new Date(lecture.created_at).toLocaleDateString()}
+                <Calendar className="w-4 h-4" />
+                {lecture.scheduled_at
+                  ? new Date(lecture.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : new Date(lecture.created_at).toLocaleDateString()}
               </p>
               <p className="text-xs text-gray-500 mt-1">{lecture.medium} • Std {lecture.class}</p>
               {lecture.video_url && (

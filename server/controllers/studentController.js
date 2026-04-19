@@ -25,7 +25,7 @@ exports.getLectures = async (req, res) => {
       .select('*, subject:subjects(name)')
       .in('class', standards)
       .eq('medium', profile.medium)
-      .order('created_at', { ascending: false });
+      .order('scheduled_at', { ascending: true, nullsFirst: false });
 
     if (error) return res.status(500).json({ error: error.message });
 
@@ -119,6 +119,20 @@ exports.submitHomework = async (req, res) => {
     if (!file) return res.status(400).json({ error: 'No PDF file attached' });
     if (file.mimetype !== 'application/pdf') return res.status(400).json({ error: 'Only PDFs are allowed' });
 
+    // Verify this homework is actually assigned to this student's class/medium
+    const standards = getStandardsArray(profile.standards);
+    const { data: hwCheck } = await supabase
+      .from('homework')
+      .select('id')
+      .eq('id', homeworkId)
+      .in('class', standards)
+      .eq('medium', profile.medium)
+      .maybeSingle();
+
+    if (!hwCheck) {
+      return res.status(403).json({ error: 'This homework is not assigned to your class.' });
+    }
+
     // Check for duplicate submission
     const { data: existing } = await supabase
       .from('homework_submissions')
@@ -154,7 +168,6 @@ exports.submitHomework = async (req, res) => {
       .single();
 
     if (insertError) {
-      // Clean up uploaded file on DB error
       await supabase.storage.from('lms-files').remove([filePathKey]).catch(console.error);
       return res.status(500).json({ error: insertError.message });
     }
@@ -199,20 +212,46 @@ exports.getNotices = async (req, res) => {
     const profile = req.userProfile;
     const standards = getStandardsArray(profile.standards);
 
-    // Fetch class-specific notices + global admin announcements (class='ALL')
-    const classValues = [...(standards.length ? standards : []), 'ALL'];
+    const queries = [];
 
-    const { data, error } = await supabase
-      .from('notices')
-      .select('*')
-      .or(
-        `and(class.in.(${classValues.map((c) => `"${c}"`).join(',')}),medium.eq.${profile.medium}),and(class.eq.ALL,medium.eq.ALL)`
-      )
-      .order('created_at', { ascending: false });
+    // Class-specific notices for this student's class(es) and medium
+    if (standards.length && profile.medium) {
+      queries.push(
+        supabase
+          .from('notices')
+          .select('*')
+          .in('class', standards)
+          .eq('medium', profile.medium)
+          .order('created_at', { ascending: false })
+      );
+    }
 
-    if (error) return res.status(500).json({ error: error.message });
+    // Global admin announcements (class='ALL', medium='ALL')
+    queries.push(
+      supabase
+        .from('notices')
+        .select('*')
+        .eq('class', 'ALL')
+        .eq('medium', 'ALL')
+        .order('created_at', { ascending: false })
+    );
 
-    res.json(data || []);
+    const results = await Promise.all(queries);
+    for (const { error } of results) {
+      if (error) return res.status(500).json({ error: error.message });
+    }
+
+    // Merge, deduplicate by id, sort newest first
+    const allNotices = results.flatMap((r) => r.data || []);
+    const seen = new Set();
+    const unique = allNotices.filter((n) => {
+      if (seen.has(n.id)) return false;
+      seen.add(n.id);
+      return true;
+    });
+    unique.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json(unique);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
