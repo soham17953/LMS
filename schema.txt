@@ -1,0 +1,99 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.attendance (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  student_id text NOT NULL,
+  date date NOT NULL,
+  status text NOT NULL CHECK (status = ANY (ARRAY['present'::text, 'absent'::text, 'late'::text, 'excused'::text])),
+  class text NOT NULL,
+  medium text NOT NULL,
+  subject_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  teacher_id text,
+  CONSTRAINT attendance_pkey PRIMARY KEY (id),
+  CONSTRAINT attendance_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT attendance_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.homework (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  due_date timestamp with time zone NOT NULL,
+  class text NOT NULL,
+  medium text NOT NULL,
+  subject_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  teacher_id text,
+  CONSTRAINT homework_pkey PRIMARY KEY (id),
+  CONSTRAINT homework_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT homework_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.homework_submissions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  homework_id uuid,
+  student_id text NOT NULL,
+  content text,
+  file_url text,
+  submitted_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT homework_submissions_pkey PRIMARY KEY (id),
+  CONSTRAINT homework_submissions_homework_id_fkey FOREIGN KEY (homework_id) REFERENCES public.homework(id)
+);
+CREATE TABLE public.lectures (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  class text NOT NULL,
+  medium text NOT NULL,
+  subject_id uuid,
+  video_url text,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  teacher_id text,
+  scheduled_at timestamp with time zone,
+  CONSTRAINT lectures_pkey PRIMARY KEY (id),
+  CONSTRAINT lectures_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT lectures_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.notices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  content text NOT NULL,
+  class text NOT NULL,
+  medium text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  teacher_id text,
+  CONSTRAINT notices_pkey PRIMARY KEY (id),
+  CONSTRAINT notices_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.profiles (
+  id text NOT NULL,
+  email text NOT NULL UNIQUE,
+  name text,
+  role text CHECK (role = ANY (ARRAY['ADMIN'::text, 'STUDENT'::text, 'TEACHER'::text])),
+  status text CHECK (status = ANY (ARRAY['PENDING'::text, 'APPROVED'::text, 'REJECTED'::text])),
+  medium text,
+  standards jsonb DEFAULT '[]'::jsonb,
+  subjects jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.study_materials (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  file_url text,
+  class text NOT NULL,
+  medium text NOT NULL,
+  subject_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  teacher_id text,
+  CONSTRAINT study_materials_pkey PRIMARY KEY (id),
+  CONSTRAINT study_materials_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT study_materials_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.subjects (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT subjects_pkey PRIMARY KEY (id)
+);

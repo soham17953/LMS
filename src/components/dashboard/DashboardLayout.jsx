@@ -59,7 +59,7 @@ const DashboardLayout = ({ role }) => {
 
       try {
         const token = await getToken();
-        const userProfile = await AuthService.getCurrentUserProfile(token, userId);
+        const userProfile = await AuthService.getCurrentUserProfile(token);
         setProfile(userProfile);
         
         // Strict Guard
