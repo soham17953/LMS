@@ -52,6 +52,7 @@ const StudentHome = () => {
       });
     } catch (error) {
       console.error('Failed to load dashboard', error);
+      // Non-blocking — dashboard still renders with defaults
     }
   };
 

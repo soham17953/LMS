@@ -114,7 +114,7 @@ const AdminRequests = () => {
                     </td>
                     <td className="p-4 text-sm text-gray-600">{user.medium || '-'}</td>
                     <td className="p-4 text-sm text-gray-600">
-                      {user.role === 'STUDENT' ? user.standards[0] || '-' : (user.standards || []).join(', ') || '-'}
+                      {Array.isArray(user.standards) && user.standards.length > 0 ? user.standards.join(', ') : '—'}
                     </td>
                     <td className="p-4">
                       <span className={`px-3 py-1 text-xs font-bold rounded-full ${

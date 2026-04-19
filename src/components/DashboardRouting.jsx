@@ -18,6 +18,7 @@ const DashboardRouting = () => {
             try {
                 const token = await getToken();
                 const profile = await AuthService.getCurrentUserProfile(token);
+
                 
                 if (!profile) {
                      navigate('/onboarding');
