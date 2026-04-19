@@ -96,15 +96,31 @@ exports.getAttendance = async (req, res) => {
   try {
     const profile = req.userProfile;
 
-    // attendance.student_id is uuid — profile.id is a Clerk text ID.
-    // We cast via ::text comparison using a raw filter.
+    console.log('[getAttendance] Fetching attendance for student:', profile.id);
+
+    // attendance.student_id is text (Clerk ID) — matches profile.id directly
     const { data, error } = await supabase
       .from('attendance')
-      .select('*, subject:subjects(name)')
+      .select(`
+        id,
+        student_id,
+        date,
+        status,
+        class,
+        medium,
+        subject_id,
+        created_at,
+        subject:subjects(id, name)
+      `)
       .eq('student_id', profile.id)
       .order('date', { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('[getAttendance] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('[getAttendance] Found', data?.length || 0, 'attendance records');
 
     res.json(
       (data || []).map((a) => ({
@@ -113,6 +129,7 @@ exports.getAttendance = async (req, res) => {
       }))
     );
   } catch (error) {
+    console.error('[getAttendance] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };

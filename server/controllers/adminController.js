@@ -328,12 +328,54 @@ exports.deleteLecture = async (req, res) => {
 
 exports.getAllAttendance = async (req, res) => {
   try {
+    // Fetch all attendance records
     const { data, error } = await supabase
       .from('attendance')
-      .select('*, student:profiles!attendance_student_id_fkey(name), teacher:profiles!attendance_teacher_id_fkey(name), subject:subjects(name)')
+      .select(`
+        id,
+        student_id,
+        date,
+        status,
+        class,
+        medium,
+        subject_id,
+        teacher_id,
+        created_at
+      `)
       .order('date', { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('[getAllAttendance] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Fetch student names separately
+    const studentIds = [...new Set((data || []).map(r => r.student_id))];
+    const { data: students } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', studentIds);
+    
+    const studentMap = {};
+    (students || []).forEach(s => { studentMap[s.id] = s.name; });
+
+    // Fetch teacher names separately
+    const teacherIds = [...new Set((data || []).map(r => r.teacher_id).filter(Boolean))];
+    const { data: teachers } = teacherIds.length > 0
+      ? await supabase.from('profiles').select('id, name').in('id', teacherIds)
+      : { data: [] };
+    
+    const teacherMap = {};
+    (teachers || []).forEach(t => { teacherMap[t.id] = t.name; });
+
+    // Fetch subject names separately
+    const subjectIds = [...new Set((data || []).map(r => r.subject_id).filter(Boolean))];
+    const { data: subjects } = subjectIds.length > 0 
+      ? await supabase.from('subjects').select('id, name').in('id', subjectIds)
+      : { data: [] };
+    
+    const subjectMap = {};
+    (subjects || []).forEach(s => { subjectMap[s.id] = s.name; });
 
     // Group by date + teacher + class + medium + subject
     const grouped = {};
@@ -345,8 +387,8 @@ exports.getAllAttendance = async (req, res) => {
           date: row.date,
           medium: row.medium,
           class: row.class,
-          subjectName: row.subject?.name || null,
-          teacherName: row.teacher?.name || 'Unknown',
+          subjectName: row.subject_id ? subjectMap[row.subject_id] || null : null,
+          teacherName: row.teacher_id ? teacherMap[row.teacher_id] || 'Unknown' : 'Unknown',
           teacher_id: row.teacher_id,
           present: 0,
           absent: 0,
@@ -356,11 +398,11 @@ exports.getAllAttendance = async (req, res) => {
       }
       grouped[key].total++;
       if (row.status === 'present') grouped[key].present++;
-      else grouped[key].absent++;
+      else if (row.status === 'absent') grouped[key].absent++;
 
       grouped[key].students.push({
         id: row.student_id,
-        name: row.student?.name || 'Unknown',
+        name: studentMap[row.student_id] || 'Unknown',
         status: row.status,
         record_id: row.id,
       });
@@ -368,6 +410,7 @@ exports.getAllAttendance = async (req, res) => {
 
     res.json(Object.values(grouped));
   } catch (error) {
+    console.error('[getAllAttendance] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };

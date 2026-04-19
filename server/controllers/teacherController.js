@@ -678,11 +678,43 @@ exports.getAttendanceHistory = async (req, res) => {
     const profile = req.userProfile;
     const { data, error } = await supabase
       .from('attendance')
-      .select('*, student:profiles!attendance_student_id_fkey(name), subject:subjects(name)')
+      .select(`
+        id,
+        student_id,
+        date,
+        status,
+        class,
+        medium,
+        subject_id,
+        teacher_id,
+        created_at
+      `)
       .eq('teacher_id', profile.id)
       .order('date', { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('[getAttendanceHistory] Query error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Fetch student names separately
+    const studentIds = [...new Set((data || []).map(r => r.student_id))];
+    const { data: students } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', studentIds);
+    
+    const studentMap = {};
+    (students || []).forEach(s => { studentMap[s.id] = s.name; });
+
+    // Fetch subject names separately
+    const subjectIds = [...new Set((data || []).map(r => r.subject_id).filter(Boolean))];
+    const { data: subjects } = subjectIds.length > 0 
+      ? await supabase.from('subjects').select('id, name').in('id', subjectIds)
+      : { data: [] };
+    
+    const subjectMap = {};
+    (subjects || []).forEach(s => { subjectMap[s.id] = s.name; });
 
     // Group by date + class + medium + subject
     const grouped = {};
@@ -694,18 +726,18 @@ exports.getAttendanceHistory = async (req, res) => {
           date: row.date,
           medium: row.medium,
           class: row.class,
-          subjectName: row.subject?.name || null,
+          subjectName: row.subject_id ? subjectMap[row.subject_id] || null : null,
           present: 0,
           absent: 0,
           students: [],
         };
       }
       if (row.status === 'present') grouped[key].present++;
-      else grouped[key].absent++;
+      else if (row.status === 'absent') grouped[key].absent++;
 
       grouped[key].students.push({
         id: row.student_id,
-        name: row.student?.name || 'Unknown',
+        name: studentMap[row.student_id] || 'Unknown',
         status: row.status,
         record_id: row.id,
       });
@@ -713,6 +745,7 @@ exports.getAttendanceHistory = async (req, res) => {
 
     res.json(Object.values(grouped));
   } catch (error) {
+    console.error('[getAttendanceHistory] Exception:', error);
     res.status(500).json({ error: error.message });
   }
 };
