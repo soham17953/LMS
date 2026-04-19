@@ -60,6 +60,15 @@ const DashboardLayout = ({ role }) => {
       try {
         const token = await getToken();
         const userProfile = await AuthService.getCurrentUserProfile(token);
+        
+        console.log('User Profile:', userProfile); // Debug log
+        
+        if (!userProfile) {
+          console.error('No profile returned from API');
+          navigate('/onboarding');
+          return;
+        }
+        
         setProfile(userProfile);
         
         // Strict Guard
@@ -68,27 +77,65 @@ const DashboardLayout = ({ role }) => {
           return;
         }
         
-        // Route protection by role
-        if (userProfile.role.toLowerCase() !== role.toLowerCase()) {
-           navigate(`/${userProfile.role.toLowerCase()}`);
+        // Route protection by role - only redirect if significantly different
+        const userRole = userProfile.role?.toLowerCase();
+        const expectedRole = role?.toLowerCase();
+        
+        if (userRole && expectedRole && userRole !== expectedRole) {
+          console.log(`Role mismatch: expected ${expectedRole}, got ${userRole}`);
+          navigate(`/${userRole}`, { replace: true });
+          return;
         }
+        
+        setLoading(false);
       } catch (error) {
         console.error("Failed to load profile:", error);
-        navigate('/login'); // Fallback
-      } finally {
+        // Don't redirect on API errors in production - show error state instead
+        if (error.message?.includes('Failed to fetch')) {
+          console.error('API connection error - check VITE_API_URL');
+        }
         setLoading(false);
       }
     };
     
     fetchProfile();
-  }, [isLoaded, isSignedIn, userId, navigate, role, getToken]);
+  }, [isLoaded, isSignedIn, userId, role, getToken]);
 
   const handleLogout = () => {
     clerk.signOut(() => navigate('/'));
   };
 
-  if (!isLoaded || loading || !profile) {
-     return <div className="h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (!isLoaded || loading) {
+     return (
+       <div className="h-screen flex items-center justify-center">
+         <div className="text-center">
+           <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+           <p className="text-gray-600">Loading dashboard...</p>
+         </div>
+       </div>
+     );
+  }
+  
+  if (!profile) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center max-w-md p-6">
+          <div className="text-red-500 mb-4">
+            <Bell className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Profile</h2>
+          <p className="text-gray-600 mb-4">
+            There was an error connecting to the server. Please check your internet connection and try again.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
