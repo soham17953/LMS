@@ -3,14 +3,17 @@ import { Users, UserCheck, AlertCircle, Megaphone, Check, X } from 'lucide-react
 import { motion } from 'framer-motion';
 import { AuthService } from '../../lib/authService';
 import toast from 'react-hot-toast';
+import { useAuth } from '@clerk/clerk-react';
 
 const AdminHome = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth();
 
   const fetchUsers = async () => {
     try {
-      const data = await AuthService.getAllUsers();
+      const token = await getToken();
+      const data = await AuthService.getAllUsers(token);
       setUsers(data);
     } catch (e) {
       toast.error('Failed to parse active user list.');
@@ -21,12 +24,13 @@ const AdminHome = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [getToken]);
 
   const handleStatusUpdate = async (userId, newStatus) => {
     const loadingToast = toast.loading(`Marking user as ${newStatus}...`);
     try {
-      await AuthService.updateUserStatus(userId, newStatus);
+      const token = await getToken();
+      await AuthService.updateUserStatus(token, userId, newStatus);
       toast.success(`User successfully ${newStatus}`, { id: loadingToast });
       fetchUsers(); // Refresh
     } catch (error) {
@@ -35,8 +39,8 @@ const AdminHome = () => {
   };
 
   const pendingRequests = users.filter(u => u.status === 'PENDING' && u.role !== 'ADMIN');
-  const studentCount = users.filter(u => u.role === 'Student').length;
-  const teacherCount = users.filter(u => u.role === 'Teacher').length;
+  const studentCount = users.filter(u => u.role === 'STUDENT').length;
+  const teacherCount = users.filter(u => u.role === 'TEACHER').length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -116,12 +120,12 @@ const AdminHome = () => {
                           <p className="text-xs text-gray-500">{user.email}</p>
                         </td>
                         <td className="p-4 text-gray-600 font-medium">
-                          <span className={`px-2 py-1 rounded text-xs ${user.role === 'Teacher' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          <span className={`px-2 py-1 rounded text-xs ${user.role === 'TEACHER' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
                             {user.role}
                           </span>
                         </td>
                         <td className="p-4 text-gray-600">
-                          {user.role === 'Student' ? user.standards[0] || '-' : (user.standards || []).join(', ') || '-'}
+                          {user.role === 'STUDENT' ? user.standards[0] || '-' : (user.standards || []).join(', ') || '-'}
                         </td>
                         <td className="p-4 text-gray-600">{user.medium || '-'}</td>
                         <td className="p-4 pr-6 flex justify-end gap-2">
