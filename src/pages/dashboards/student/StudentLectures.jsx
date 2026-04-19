@@ -1,29 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Loader2 } from 'lucide-react';
-import { getSubjects } from '../../../lib/studentSubjects';
-
-const STUDENT_PROFILE = { medium: 'English', class: '9' };
-
-const ALL_LECTURES = [
-  { id: 1, title: 'Trigonometry Basics', subject: 'Maths', date: '2026-04-21', time: '10:00', medium: 'English', class: '9' },
-  { id: 2, title: 'Chemical Reactions', subject: 'Science', date: '2026-04-22', time: '12:00', medium: 'English', class: '9' },
-  { id: 3, title: 'Grammar Practice', subject: 'English', date: '2026-04-22', time: '09:00', medium: 'English', class: '8' },
-];
+import { useAuth } from '@clerk/clerk-react';
+import { AuthService } from '../../../lib/authService';
 
 const StudentLectures = () => {
+  const { getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [lectures, setLectures] = useState([]);
   const [dateFilter, setDateFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 350);
-    return () => clearTimeout(timer);
+    fetchLectures();
   }, []);
 
-  const allowedSubjects = useMemo(
-    () => getSubjects(STUDENT_PROFILE.medium, STUDENT_PROFILE.class),
-    [STUDENT_PROFILE.medium, STUDENT_PROFILE.class]
-  );
+  const fetchLectures = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      const data = await AuthService.getStudentLectures(token);
+      setLectures(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const allowedSubjects = useMemo(() => {
+    const subjects = lectures.map(l => l.subjectName || 'General');
+    return [...new Set(subjects)];
+  }, [lectures]);
 
   useEffect(() => {
     if (subjectFilter && !allowedSubjects.includes(subjectFilter)) {
@@ -32,11 +39,17 @@ const StudentLectures = () => {
   }, [allowedSubjects, subjectFilter]);
 
   const filteredLectures = useMemo(() => {
-    return ALL_LECTURES
-      .filter((lecture) => lecture.medium === STUDENT_PROFILE.medium && lecture.class === STUDENT_PROFILE.class)
-      .filter((lecture) => !dateFilter || lecture.date === dateFilter)
-      .filter((lecture) => !subjectFilter || lecture.subject === subjectFilter);
-  }, [dateFilter, subjectFilter]);
+    return lectures
+      // For date filter, we can just check if lecture's created_at starts with the date string (e.g. YYYY-MM-DD),
+      // but normally lectures have their own scheduled 'date' column in a real app.
+      // If we don't have a date column, we can filter by created_at.
+      .filter((lecture) => {
+        if (!dateFilter) return true;
+        // Basic match for date string
+        return lecture.created_at?.startsWith(dateFilter);
+      })
+      .filter((lecture) => !subjectFilter || (lecture.subjectName || 'General') === subjectFilter);
+  }, [lectures, dateFilter, subjectFilter]);
 
   if (isLoading) {
     return (
@@ -55,7 +68,7 @@ const StudentLectures = () => {
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Filter by Date</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Filter by Date (Created)</label>
           <input
             type="date"
             value={dateFilter}
@@ -85,7 +98,7 @@ const StudentLectures = () => {
               <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 border-b border-gray-100">
                 <th className="p-4 pl-6">Title</th>
                 <th className="p-4">Subject</th>
-                <th className="p-4">Date & Time</th>
+                <th className="p-4">Date Created</th>
                 <th className="p-4">Medium</th>
                 <th className="p-4">Class</th>
               </tr>
@@ -96,9 +109,17 @@ const StudentLectures = () => {
               ) : (
                 filteredLectures.map((lecture) => (
                   <tr key={lecture.id}>
-                    <td className="p-4 pl-6 font-semibold text-gray-900">{lecture.title}</td>
-                    <td className="p-4 text-gray-600">{lecture.subject}</td>
-                    <td className="p-4 text-gray-600">{lecture.date} at {lecture.time}</td>
+                    <td className="p-4 pl-6 font-semibold text-gray-900">
+                      {lecture.video_url ? (
+                        <a href={lecture.video_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
+                          {lecture.title}
+                        </a>
+                      ) : (
+                        lecture.title
+                      )}
+                    </td>
+                    <td className="p-4 text-gray-600">{lecture.subjectName || 'General'}</td>
+                    <td className="p-4 text-gray-600">{new Date(lecture.created_at).toLocaleDateString()}</td>
                     <td className="p-4 text-gray-600">{lecture.medium}</td>
                     <td className="p-4 text-gray-700 font-semibold">Std {lecture.class}</td>
                   </tr>
@@ -115,9 +136,17 @@ const StudentLectures = () => {
         ) : (
           filteredLectures.map((lecture) => (
             <div key={lecture.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-              <p className="font-bold text-gray-900">{lecture.title}</p>
-              <p className="text-sm text-gray-600 mt-1">{lecture.subject}</p>
-              <p className="text-sm text-gray-600 mt-1 flex items-center gap-1"><Calendar className="w-4 h-4" />{lecture.date} at {lecture.time}</p>
+              <p className="font-bold text-gray-900">
+                 {lecture.video_url ? (
+                   <a href={lecture.video_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
+                     {lecture.title}
+                   </a>
+                 ) : (
+                   lecture.title
+                 )}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">{lecture.subjectName || 'General'}</p>
+              <p className="text-sm text-gray-600 mt-1 flex items-center gap-1"><Calendar className="w-4 h-4" />{new Date(lecture.created_at).toLocaleDateString()}</p>
               <p className="text-xs text-gray-500 mt-1">{lecture.medium} • Std {lecture.class}</p>
             </div>
           ))

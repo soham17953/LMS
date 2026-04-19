@@ -1,30 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getSubjects } from '../../../lib/studentSubjects';
-
-const STUDENT_PROFILE = { medium: 'English', class: '9' };
-
-const ALL_MATERIALS = [
-  { id: 1, title: 'Geometry Notes', description: 'Important circle theorems.', subject: 'Maths', class: '9', medium: 'English', file: 'geometry_notes.pdf' },
-  { id: 2, title: 'Physics Formula Sheet', description: 'Motion and force formulas.', subject: 'Science', class: '9', medium: 'English', file: 'physics_sheet.pdf' },
-  { id: 3, title: 'Poetry Notes', description: 'Marathi poetry references.', subject: 'Marathi', class: '9', medium: 'Marathi', file: 'poetry_notes.pdf' },
-];
+import { useAuth } from '@clerk/clerk-react';
+import { AuthService } from '../../../lib/authService';
 
 const StudentMaterials = () => {
+  const { getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [materials, setMaterials] = useState([]);
   const [subjectFilter, setSubjectFilter] = useState('');
-  const [classFilter, setClassFilter] = useState(STUDENT_PROFILE.class);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 350);
-    return () => clearTimeout(timer);
+    fetchMaterials();
   }, []);
 
-  const allowedSubjects = useMemo(
-    () => getSubjects(STUDENT_PROFILE.medium, STUDENT_PROFILE.class),
-    [STUDENT_PROFILE.medium, STUDENT_PROFILE.class]
-  );
+  const fetchMaterials = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      const data = await AuthService.getStudentMaterials(token);
+      setMaterials(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const allowedSubjects = useMemo(() => {
+    const subjects = materials.map(m => m.subjectName || 'General');
+    return [...new Set(subjects)];
+  }, [materials]);
 
   useEffect(() => {
     if (subjectFilter && !allowedSubjects.includes(subjectFilter)) {
@@ -33,14 +39,16 @@ const StudentMaterials = () => {
   }, [allowedSubjects, subjectFilter]);
 
   const filteredMaterials = useMemo(() => {
-    return ALL_MATERIALS
-      .filter((material) => material.medium === STUDENT_PROFILE.medium && material.class === STUDENT_PROFILE.class)
-      .filter((material) => !subjectFilter || material.subject === subjectFilter)
-      .filter((material) => !classFilter || material.class === classFilter);
-  }, [subjectFilter, classFilter]);
+    return materials
+      .filter((material) => !subjectFilter || (material.subjectName || 'General') === subjectFilter);
+  }, [materials, subjectFilter]);
 
-  const handleDownload = (file) => {
-    toast.success(`Downloading ${file}`);
+  const handleDownload = (fileUrl) => {
+    if (!fileUrl) {
+      toast.error('No file available for download');
+      return;
+    }
+    window.open(fileUrl, '_blank');
   };
 
   if (isLoading) {
@@ -72,16 +80,6 @@ const StudentMaterials = () => {
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Filter by Class</label>
-          <select
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value={STUDENT_PROFILE.class}>Std {STUDENT_PROFILE.class}</option>
-          </select>
-        </div>
       </div>
 
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -94,26 +92,26 @@ const StudentMaterials = () => {
                 <th className="p-4">Subject</th>
                 <th className="p-4">Class</th>
                 <th className="p-4">Medium</th>
-                <th className="p-4">File</th>
                 <th className="p-4 pr-6 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredMaterials.length === 0 ? (
-                <tr><td colSpan="7" className="p-8 text-center text-gray-500">No data available</td></tr>
+                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No data available</td></tr>
               ) : (
                 filteredMaterials.map((material) => (
                   <tr key={material.id}>
                     <td className="p-4 pl-6 font-semibold text-gray-900">{material.title}</td>
                     <td className="p-4 text-gray-600">{material.description}</td>
-                    <td className="p-4 text-gray-600">{material.subject}</td>
+                    <td className="p-4 text-gray-600">{material.subjectName || 'General'}</td>
                     <td className="p-4 text-gray-700 font-semibold">Std {material.class}</td>
                     <td className="p-4 text-gray-600">{material.medium}</td>
-                    <td className="p-4 text-gray-600">{material.file}</td>
                     <td className="p-4 pr-6 text-right">
-                      <button onClick={() => handleDownload(material.file)} className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 inline-flex items-center gap-1">
-                        <Download className="w-4 h-4" /> Download PDF
-                      </button>
+                      {material.file_url && (
+                        <button onClick={() => handleDownload(material.file_url)} className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 inline-flex items-center gap-1">
+                          <Download className="w-4 h-4" /> Download PDF
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -131,10 +129,12 @@ const StudentMaterials = () => {
             <div key={material.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
               <p className="font-bold text-gray-900">{material.title}</p>
               <p className="text-sm text-gray-600 mt-1">{material.description}</p>
-              <p className="text-xs text-gray-500 mt-1">{material.subject} • {material.medium} • Std {material.class}</p>
-              <button onClick={() => handleDownload(material.file)} className="mt-3 w-full px-3 py-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 text-sm">
-                Download PDF
-              </button>
+              <p className="text-xs text-gray-500 mt-1">{material.subjectName || 'General'} • {material.medium} • Std {material.class}</p>
+              {material.file_url && (
+                <button onClick={() => handleDownload(material.file_url)} className="mt-3 w-full px-3 py-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 text-sm">
+                  Download PDF
+                </button>
+              )}
             </div>
           ))
         )}

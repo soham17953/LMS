@@ -1,28 +1,31 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-
-const STUDENT_PROFILE = { medium: 'English', class: '9' };
-
-const ALL_ATTENDANCE = [
-  { id: 1, date: '2026-04-10', subject: 'Maths', status: 'Present', class: '9', medium: 'English' },
-  { id: 2, date: '2026-04-11', subject: 'Science', status: 'Absent', class: '9', medium: 'English' },
-  { id: 3, date: '2026-04-12', subject: 'English', status: 'Present', class: '9', medium: 'English' },
-  { id: 4, date: '2026-04-12', subject: 'Marathi', status: 'Present', class: '9', medium: 'Marathi' },
-];
+import { useAuth } from '@clerk/clerk-react';
+import { AuthService } from '../../../lib/authService';
 
 const StudentAttendance = () => {
+  const { getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [records, setRecords] = useState([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 350);
-    return () => clearTimeout(timer);
+    fetchAttendance();
   }, []);
 
-  const records = useMemo(
-    () => ALL_ATTENDANCE.filter((entry) => entry.class === STUDENT_PROFILE.class && entry.medium === STUDENT_PROFILE.medium),
-    []
-  );
-  const presentCount = records.filter((record) => record.status === 'Present').length;
+  const fetchAttendance = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      const data = await AuthService.getStudentAttendance(token);
+      setRecords(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const presentCount = records.filter((record) => record.status === 'present').length;
   const totalClasses = records.length;
   const percentage = totalClasses ? Math.round((presentCount / totalClasses) * 100) : 0;
 
@@ -73,9 +76,9 @@ const StudentAttendance = () => {
                 records.map((record) => (
                   <tr key={record.id}>
                     <td className="p-4 pl-6 font-semibold text-gray-900">{record.date}</td>
-                    <td className="p-4 text-gray-600">{record.subject}</td>
+                    <td className="p-4 text-gray-600">{record.subjectName || 'General'}</td>
                     <td className="p-4">
-                      <span className={`inline-block px-3 py-1 rounded-lg text-sm font-semibold ${record.status === 'Present' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <span className={`inline-block px-3 py-1 rounded-lg text-sm font-semibold capitalize ${record.status === 'present' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                         {record.status}
                       </span>
                     </td>
@@ -94,8 +97,8 @@ const StudentAttendance = () => {
           records.map((record) => (
             <div key={record.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
               <p className="font-bold text-gray-900">{record.date}</p>
-              <p className="text-sm text-gray-600 mt-1">{record.subject}</p>
-              <p className={`mt-2 text-sm font-semibold ${record.status === 'Present' ? 'text-green-700' : 'text-red-700'}`}>{record.status}</p>
+              <p className="text-sm text-gray-600 mt-1">{record.subjectName || 'General'}</p>
+              <p className={`mt-2 text-sm font-semibold capitalize ${record.status === 'present' ? 'text-green-700' : 'text-red-700'}`}>{record.status}</p>
             </div>
           ))
         )}
