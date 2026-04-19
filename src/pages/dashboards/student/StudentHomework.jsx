@@ -1,34 +1,42 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Download, Loader2, Upload, File } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const STUDENT_PROFILE = { medium: 'English', class: '9' };
-
-const ALL_HOMEWORK = [
-  { id: 1, title: 'Algebra Equations', description: 'Solve chapter 4 exercises.', class: '9', medium: 'English', file: 'algebra_hw.pdf' },
-  { id: 2, title: 'Marathi Essay', description: 'Write essay on environment.', class: '9', medium: 'Marathi', file: 'essay_hw.pdf' },
-];
+import { useAuth } from '@clerk/clerk-react';
+import { AuthService } from '../../../lib/authService';
 
 const StudentHomework = () => {
+  const { getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [homeworkList, setHomeworkList] = useState([]);
   const [submissions, setSubmissions] = useState({});
   const fileRefs = useRef({});
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 350);
-    return () => clearTimeout(timer);
+    fetchHomework();
   }, []);
 
-  const homeworkList = useMemo(
-    () => ALL_HOMEWORK.filter((item) => item.medium === STUDENT_PROFILE.medium && item.class === STUDENT_PROFILE.class),
-    []
-  );
-
-  const handleDownload = (file) => {
-    toast.success(`Downloading ${file}`);
+  const fetchHomework = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      const data = await AuthService.getStudentHomework(token);
+      setHomeworkList(data);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSubmission = (homeworkId, event) => {
+  const handleDownload = (fileUrl) => {
+    if (!fileUrl) {
+      toast.error('No file available for download.');
+      return;
+    }
+    window.open(fileUrl, '_blank');
+  };
+
+  const handleSubmission = async (homeworkId, event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.type !== 'application/pdf') {
@@ -36,8 +44,19 @@ const StudentHomework = () => {
       event.target.value = '';
       return;
     }
-    setSubmissions((prev) => ({ ...prev, [homeworkId]: file.name }));
-    toast.success('Submission uploaded successfully.');
+
+    try {
+      const toastId = toast.loading('Uploading submission...');
+      const token = await getToken();
+      await AuthService.submitHomework(token, homeworkId, file);
+      
+      // Update UI optimistically
+      setHomeworkList(prev => prev.map(hw => hw.id === homeworkId ? { ...hw, isSubmitted: true } : hw));
+      setSubmissions((prev) => ({ ...prev, [homeworkId]: file.name }));
+      toast.success('Submission uploaded successfully.', { id: toastId });
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   if (isLoading) {
