@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Megaphone, BookOpen, Clock, Users, User, FileText, Briefcase, GraduationCap, 
   LayoutDashboard, ClipboardList, BookMarked, Bell, LogOut, Menu, X 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth, useUser, useClerk, UserButton } from '@clerk/clerk-react';
+import { AuthService } from '../../lib/authService';
 
 const sidebarConfig = {
   admin: [
@@ -35,14 +37,59 @@ const sidebarConfig = {
 
 const DashboardLayout = ({ role }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
   const location = useLocation();
   const links = sidebarConfig[role] || sidebarConfig.student;
 
+  const { isLoaded, isSignedIn, getToken, userId } = useAuth();
+  const { user } = useUser();
+  const clerk = useClerk();
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!isLoaded) return;
+      
+      if (!isSignedIn) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const token = await getToken();
+        const userProfile = await AuthService.getCurrentUserProfile(token, userId);
+        setProfile(userProfile);
+        
+        // Strict Guard
+        if (userProfile.status === 'PENDING') {
+          navigate('/approval-pending');
+          return;
+        }
+        
+        // Route protection by role
+        if (userProfile.role.toLowerCase() !== role.toLowerCase()) {
+           navigate(`/${userProfile.role.toLowerCase()}`);
+        }
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+        navigate('/login'); // Fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchProfile();
+  }, [isLoaded, isSignedIn, userId, navigate, role, getToken]);
+
   const handleLogout = () => {
-    // Navigate home for now
-    navigate('/');
+    clerk.signOut(() => navigate('/'));
   };
+
+  if (!isLoaded || loading || !profile) {
+     return <div className="h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div></div>;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
@@ -130,17 +177,13 @@ const DashboardLayout = ({ role }) => {
                <span className="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>
              </button>
              <div className="w-px h-6 bg-gray-200"></div>
-             <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold uppercase overflow-hidden ring-2 ring-white border border-gray-100">
-                  {role.charAt(0)}
+             <div className="flex items-center gap-3">
+                <div className="hidden md:block text-right">
+                  <p className="text-sm font-bold text-gray-900 leading-none capitalize">{profile?.name}</p>
+                  <p className="text-xs font-semibold text-gray-500 mt-1 capitalize">{role.toLowerCase()}</p>
                 </div>
-                <div className="hidden md:block">
-                  <p className="text-sm font-bold text-gray-700 leading-none capitalize">{role}</p>
-                </div>
+                <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-10 h-10 ring-2 ring-white border border-gray-100" } }} />
              </div>
-             <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 ml-2" title="Logout">
-                <LogOut className="w-5 h-5" />
-             </button>
            </div>
         </header>
 

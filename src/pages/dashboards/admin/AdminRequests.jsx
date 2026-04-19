@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, X, Search, Filter } from 'lucide-react';
 import { AuthService } from '../../../lib/authService';
+import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 
 const AdminRequests = () => {
@@ -9,12 +10,16 @@ const AdminRequests = () => {
   const [filter, setFilter] = useState('PENDING'); // PENDING | APPROVED | REJECTED
   const [search, setSearch] = useState('');
 
+  const { getToken } = useAuth();
+
   const fetchUsers = async () => {
     try {
-      const data = await AuthService.getAllUsers();
+      const token = await getToken();
+      const data = await AuthService.getAllUsers(token);
       setUsers(data);
     } catch (e) {
       toast.error('Failed to load users.');
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -22,12 +27,13 @@ const AdminRequests = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [getToken]);
 
   const handleStatusUpdate = async (userId, newStatus) => {
     const loadingToast = toast.loading(`Marking user as ${newStatus}...`);
     try {
-      await AuthService.updateUserStatus(userId, newStatus);
+      const token = await getToken();
+      await AuthService.updateUserStatus(token, userId, newStatus);
       toast.success(`User successfully ${newStatus}`, { id: loadingToast });
       fetchUsers();
     } catch (error) {
@@ -102,13 +108,13 @@ const AdminRequests = () => {
                       <p className="text-xs text-gray-500">{user.email}</p>
                     </td>
                     <td className="p-4 font-medium">
-                      <span className={`px-2 py-1 rounded text-xs ${user.role === 'Teacher' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      <span className={`px-2 py-1 rounded text-xs ${user.role === 'TEACHER' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
                         {user.role}
                       </span>
                     </td>
                     <td className="p-4 text-sm text-gray-600">{user.medium || '-'}</td>
                     <td className="p-4 text-sm text-gray-600">
-                      {user.role === 'Student' ? user.standards[0] || '-' : (user.standards || []).join(', ') || '-'}
+                      {user.role === 'STUDENT' ? user.standards[0] || '-' : (user.standards || []).join(', ') || '-'}
                     </td>
                     <td className="p-4">
                       <span className={`px-3 py-1 text-xs font-bold rounded-full ${

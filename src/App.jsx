@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Onboarding from './pages/Onboarding';
 import About from './pages/About';
 import Courses from './pages/Courses';
 import CourseDetails from './pages/CourseDetails';
@@ -13,6 +14,7 @@ import ApprovalPending from './pages/ApprovalPending';
 
 // Dashboards
 import DashboardLayout from './components/dashboard/DashboardLayout';
+import DashboardRouting from './components/DashboardRouting';
 import AdminHome from './pages/dashboards/AdminHome';
 import TeacherHome from './pages/dashboards/TeacherHome';
 import StudentHome from './pages/dashboards/StudentHome';
@@ -34,6 +36,8 @@ import StudentMaterials from './pages/dashboards/student/StudentMaterials';
 import StudentAttendance from './pages/dashboards/student/StudentAttendance';
 import StudentNotices from './pages/dashboards/student/StudentNotices';
 
+import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+
 function App() {
   return (
     <>
@@ -46,9 +50,13 @@ function App() {
         <Route path="/courses/:slug" element={<CourseDetails />} />
         <Route path="/announcements" element={<Announcements />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/login/*" element={<Login />} />
+        <Route path="/signup/*" element={<Signup />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/approval-pending" element={<ApprovalPending />} />
+        <Route path="/dashboard-routing" element={<DashboardRouting />} />
+        {/* Callback for Google SSO */}
+        <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback />} />
 
       {/* Admin Dashboard */}
       <Route path="/admin" element={<DashboardLayout role="admin" />}>
