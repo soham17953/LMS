@@ -20,9 +20,11 @@ const StudentHomework = () => {
       setIsLoading(true);
       const token = await getToken();
       const data = await AuthService.getStudentHomework(token);
+      console.log('[StudentHomework] Fetched homework:', data);
       setHomeworkList(data);
     } catch (error) {
-      toast.error('Failed to load homework.');
+      console.error('[StudentHomework] Error:', error);
+      toast.error(error.message || 'Failed to load homework.');
     } finally {
       setIsLoading(false);
     }

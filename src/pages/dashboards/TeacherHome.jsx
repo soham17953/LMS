@@ -116,7 +116,7 @@ const TeacherHome = () => {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="flex items-center gap-1 text-sm font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded-md mb-1">
-                      <Clock className="w-4 h-4" /> {new Date(lecture.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <Clock className="w-4 h-4" /> {lecture.scheduled_at ? new Date(lecture.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
                     </div>
                     <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-md">Scheduled</span>
                   </div>

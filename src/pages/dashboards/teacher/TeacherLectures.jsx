@@ -58,10 +58,11 @@ const TeacherLectures = () => {
   };
 
   const handleEdit = (lecture) => {
-    // Parse scheduled_at back into date + time fields
+    // Parse scheduled_at back into date + time fields (stored as UTC with Z suffix)
     const dt = lecture.scheduled_at ? new Date(lecture.scheduled_at) : new Date();
+    // Use UTC values to match what was originally entered
     const date = dt.toISOString().split('T')[0];
-    const time = dt.toTimeString().slice(0, 5);
+    const time = dt.toISOString().split('T')[1].slice(0, 5);
     setFormData({
       id: lecture.id,
       title: lecture.title,

@@ -12,7 +12,7 @@ const requireAuth = (req, res, next) => {
 const getStudentProfile = async (clerkUserId) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('standards, medium, id, role, status')
+    .select('standards, medium, id, role, status, subjects')
     .eq('id', clerkUserId)
     .single();
   if (error || !data) throw new Error("Student profile not found");
